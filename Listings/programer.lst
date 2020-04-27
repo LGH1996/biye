@@ -1,0 +1,234 @@
+C51 COMPILER V9.59.0.0   PROGRAMER                                                         04/27/2020 13:06:16 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE PROGRAMER
+OBJECT MODULE PLACED IN .\Objects\programer.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE programer.c LARGE OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Li
+                    -stings\programer.lst) TABS(2) OBJECT(.\Objects\programer.obj)
+
+line level    source
+
+   1          #include<reg52.h>
+   2          #include<intrins.h>
+   3          #include<stdio.h>
+   4          #include<string.h>
+   5          
+   6          #define uchar unsigned char
+   7          #define uint unsigned int
+   8          
+   9          sbit P1_1 = P1^1;
+  10          sbit P1_2 = P1^2;
+  11          sbit P2_0 = P2^0;
+  12          sbit P2_1 = P2^1;
+  13          sbit PSH = 0xB4;
+  14          sbit PT0H = 0xB1;
+  15          sbit PT2H = 0xB5;
+  16          bit launchWave = 0;
+  17          bit ledStatus = 0;
+  18          uchar numWave = 0;
+  19          uchar numLed = 0;
+  20          uchar lastRang = 0;
+  21          uchar lastTip = 0;
+  22          uint ledTip = 0;
+  23          uint distanceTip = 0;
+  24          uint serialCount = 0;
+  25          uchar receive[100],save[100];
+  26          uchar updateGps = 0;
+  27          
+  28          
+  29          
+  30          void delay(uint i){
+  31   1        uint n;
+  32   1        for(n=0;n<i;n++){
+  33   2        _nop_();
+  34   2        }
+  35   1      }
+  36          void sendData(uchar str){
+  37   1      
+  38   1        SBUF = str;
+  39   1        while(TI == 0);
+  40   1        TI = 0;
+  41   1        
+  42   1      }
+  43          
+  44          void Serial_4() interrupt 4{
+  45   1        if(RI){
+  46   2          uchar temp = SBUF;
+  47   2          RI = 0;
+  48   2          receive[serialCount++] = temp;
+  49   2          if(temp == '\n'){
+  50   3            receive[serialCount] = 0;
+  51   3            if(receive[0]=='$' && receive[3] == 'G' && receive[4]=='G' && receive[5]=='A' && serialCount >=60 && se
+             -rialCount <80){
+  52   4              strcpy(save,receive);
+  53   4            }
+C51 COMPILER V9.59.0.0   PROGRAMER                                                         04/27/2020 13:06:16 PAGE 2   
+
+  54   3            serialCount = 0;
+  55   3            receive[0] = 0;
+  56   3          }
+  57   2        }
+  58   1      }
+  59          void Time0() interrupt 1{
+  60   1        
+  61   1        if(++numWave >= 10){
+  62   2          launchWave = 1;
+  63   2          numWave = 0;
+  64   2        }
+  65   1        
+  66   1        if(++numLed >= 5){
+  67   2          if(ledStatus != P2_0){
+  68   3            if(++ledTip >= 4){
+  69   4              ledStatus = P2_0;
+  70   4              P2_1 = !P2_0;
+  71   4            }
+  72   3          } else if(ledTip < 4) {
+  73   3            ledTip = 0;
+  74   3          }
+  75   2          if(ledStatus){
+  76   3            P2_1 = !P2_1;
+  77   3          }
+  78   2          numLed = 0;
+  79   2        }
+  80   1        
+  81   1        if(++updateGps>=105){
+  82   2          TI = 1;
+  83   2          printf("%s",save);
+  84   2          updateGps = 0;
+  85   2        }
+  86   1        
+  87   1        TH0 =0x4C;
+  88   1        TL0= 0x00;
+  89   1      }
+  90          
+  91          void Time2() interrupt 5{
+  92   1      
+  93   1        if(EXF2){
+  94   2          
+  95   2          uchar curRang = 0x00;
+  96   2          uint distance = ((RCAP2H<<8|RCAP2L)*1.085)/58;
+  97   2          EXF2 = 0;
+  98   2          //TI = 1;
+  99   2          //printf("%d\n",distance);
+ 100   2          
+ 101   2          
+ 102   2          if(distance>=50 && distance<100){
+ 103   3            curRang = 0x01;
+ 104   3          }
+ 105   2          if(distance>=100 && distance<150){
+ 106   3            curRang = 0x02;
+ 107   3          }
+ 108   2          if(distance>=150 && distance<200){
+ 109   3            curRang = 0x03;
+ 110   3          }
+ 111   2          if(distance>=200 && distance<250){
+ 112   3            curRang = 0x04;
+ 113   3          }
+ 114   2          if(distance>=250 && distance<300){
+ 115   3            curRang = 0x05;
+C51 COMPILER V9.59.0.0   PROGRAMER                                                         04/27/2020 13:06:16 PAGE 3   
+
+ 116   3          }
+ 117   2          if(distance>=300 && distance<350){
+ 118   3            curRang = 0x06;
+ 119   3          }
+ 120   2          if(distance>=350 && distance<400){
+ 121   3            curRang = 0x07;
+ 122   3          }
+ 123   2          if(distance>=400 && distance<450){
+ 124   3            curRang = 0x08;
+ 125   3          }
+ 126   2          
+ 127   2          if(curRang != 0x00){
+ 128   3            distanceTip = curRang == lastRang ? ++distanceTip : 0;
+ 129   3            lastRang = curRang;
+ 130   3          }
+ 131   2        }
+ 132   1      }
+ 133          
+ 134          void main(){
+ 135   1      
+ 136   1        EA = 1; 
+ 137   1        
+ 138   1        ET0 = 1; //开T0定时器
+ 139   1        TR0 = 1;
+ 140   1        TMOD |= 0x01;
+ 141   1        TH0 =0x4C;
+ 142   1        TL0= 0x00;
+ 143   1        
+ 144   1        TR1 = 1;//开T1定时器，作为串口的波特率发生器
+ 145   1        TMOD |= 0x20;
+ 146   1        TL1 = 0xFD;
+ 147   1        TH1 = 0xFD;
+ 148   1        
+ 149   1        ET2 = 1;       //开T2捕获模式，测量超声波测距模块反馈的电压持续时间
+ 150   1        TR2 = 1;
+ 151   1        EXEN2 = 1;
+ 152   1        CP_RL2 = 1;
+ 153   1        
+ 154   1        ES = 1; //串口初始化
+ 155   1        SM0 = 0; 
+ 156   1        SM1 = 1;
+ 157   1        REN = 1;
+ 158   1        
+ 159   1        PSH = 1;
+ 160   1        PS = 0;
+ 161   1        PT0H = 1;
+ 162   1        PT0 = 1;
+ 163   1        PT2H = 1;
+ 164   1        PT2 =1;
+ 165   1      
+ 166   1        
+ 167   1        while(1){
+ 168   2          
+ 169   2          if(launchWave){
+ 170   3            P1_2 = 1;
+ 171   3            delay(10);
+ 172   3            P1_2 = 0;
+ 173   3            while(P1_1 == 0);
+ 174   3            TH2 = 0x00;
+ 175   3            TL2 = 0x00;
+ 176   3            launchWave = 0;
+ 177   3          }
+C51 COMPILER V9.59.0.0   PROGRAMER                                                         04/27/2020 13:06:16 PAGE 4   
+
+ 178   2          
+ 179   2          if(distanceTip >= 2 && lastTip != lastRang){
+ 180   3        
+ 181   3            uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x01, 0x00,0xEF};
+ 182   3            play[6] = lastRang;
+ 183   3            for(n = 0;n<8;n++){
+ 184   4              //sendData(play[n]);
+ 185   4            }
+ 186   3            lastTip = lastRang;
+ 187   3            distanceTip = 0;
+ 188   3            delay(6800);
+ 189   3          }
+ 190   2          
+ 191   2          if(ledTip >= 4){
+ 192   3            uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x02, 0x00,0xEF};
+ 193   3            play[6] = ledStatus ? 0x01 : 0x02;
+ 194   3            for(n = 0;n<8;n++){
+ 195   4              //sendData(play[n]);
+ 196   4            }
+ 197   3            ledTip = 0;
+ 198   3            delay(7000);
+ 199   3          }
+ 200   2          
+ 201   2          }
+ 202   1        }
+ 203            
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1052    ----
+   CONSTANT SIZE    =     19    ----
+   XDATA SIZE       =    211      13
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
