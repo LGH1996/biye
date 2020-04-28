@@ -162,14 +162,52 @@ void main(){
 
 		play[6] = curRang;
 		for(n = 0;n<8;n++){
-			sendData(play[n]);
+			//sendData(play[n]);
 		}
 		delay(6800);
 	}
-		if(gpsCount >200){
-			TI = 1;
-			printf("%s",save);
-			TI = 0;
+		if(gpsCount >500){
+			//TI = 1;
+			//printf("%s",save);
+			//TI = 0;
+			uchar i,setApn[]="AT+CSTT=\"CMNET\"\n\r",ciicr[]="AT+CIICR\n\r", connect[] = "AT+CIPSTART=\"TCP\",\"120.78.203.170\",12777\n\r",send[] = "AT+CIPSEND\n\r",end = 0x1A,close[] = "AT+CIPCLOSE\n\r",shut[]="AT+CIPSHUT\n\r";
+
+			for(i=0;i<strlen(setApn);i++){
+				sendData(setApn[i]);
+			}
+			delay(1000);
+			
+			for(i=0;i<strlen(ciicr);i++){
+				sendData(ciicr[i]);
+			}
+			delay(1000);
+			
+			for(i=0;i<strlen(connect);i++){
+				sendData(connect[i]);
+			}
+			delay(5000);
+			
+			for(i=0;i<strlen(send);i++){
+				sendData(send[i]);
+			}
+			delay(1000);
+			
+			for(i=0;i<strlen(save);i++){
+				sendData(save[i]);
+			}
+			delay(1000);
+			
+			sendData(end);
+			delay(1000);
+			
+			for(i=0;i<strlen(close);i++){
+				sendData(close[i]);
+			}
+			delay(1000);
+			
+			for(i=0;i<strlen(shut);i++){
+				sendData(shut[i]);
+			}
 			gpsCount = 0;
 		}
 		
@@ -177,7 +215,7 @@ void main(){
 			uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x02, 0x00,0xEF};
 			play[6] = ledStatus ? 0x01 : 0x02;
 			for(n = 0;n<8;n++){
-				sendData(play[n]);
+				//sendData(play[n]);
 			}
 			ledTip = 0;
 			delay(7000);

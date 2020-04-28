@@ -1,4 +1,4 @@
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/27/2020 14:02:21 PAGE 1   
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 12:49:30 PAGE 1   
 
 
 C51 COMPILER V9.59.0.0, COMPILATION OF MODULE PROGREM_1
@@ -62,7 +62,7 @@ line level    source
   52   2          if(ledStatus){
   53   3            P2_1 = !P2_1;
   54   3          }
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/27/2020 14:02:21 PAGE 2   
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 12:49:30 PAGE 2   
 
   55   2          numLed = 0;
   56   2        }
@@ -126,7 +126,7 @@ line level    source
  113   1        CP_RL2 = 1;
  114   1             
  115   1        ES = 1;
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/27/2020 14:02:21 PAGE 3   
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 12:49:30 PAGE 3   
 
  116   1        SM0 = 0; //´®¿Ú³õÊ¼»¯
  117   1        SM1 = 1;
@@ -177,38 +177,77 @@ line level    source
  162   3      
  163   3          play[6] = curRang;
  164   3          for(n = 0;n<8;n++){
- 165   4            sendData(play[n]);
+ 165   4            //sendData(play[n]);
  166   4          }
  167   3          delay(6800);
  168   3        }
- 169   2          if(gpsCount >200){
- 170   3            TI = 1;
- 171   3            printf("%s",save);
- 172   3            TI = 0;
- 173   3            gpsCount = 0;
- 174   3          }
- 175   2          
- 176   2          if(ledTip >= 4){
- 177   3            uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x02, 0x00,0xEF};
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/27/2020 14:02:21 PAGE 4   
+ 169   2          if(gpsCount >500){
+ 170   3            //TI = 1;
+ 171   3            //printf("%s",save);
+ 172   3            //TI = 0;
+ 173   3            uchar i,setApn[]="AT+CSTT=\"CMNET\"\n\r",ciicr[]="AT+CIICR\n\r", connect[] = "AT+CIPSTART=\"TCP\",\"120
+             -.78.203.170\",12777\n\r",send[] = "AT+CIPSEND\n\r",end = 0x1A,close[] = "AT+CIPCLOSE\n\r",shut[]="AT+CIPSHUT\n\r";
+ 174   3      
+ 175   3            for(i=0;i<strlen(setApn);i++){
+ 176   4              sendData(setApn[i]);
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 12:49:30 PAGE 4   
 
- 178   3            play[6] = ledStatus ? 0x01 : 0x02;
- 179   3            for(n = 0;n<8;n++){
- 180   4              sendData(play[n]);
- 181   4            }
- 182   3            ledTip = 0;
- 183   3            delay(7000);
- 184   3          }
- 185   2          
- 186   2          }
- 187   1        }
- 188            
+ 177   4            }
+ 178   3            delay(1000);
+ 179   3            
+ 180   3            for(i=0;i<strlen(ciicr);i++){
+ 181   4              sendData(ciicr[i]);
+ 182   4            }
+ 183   3            delay(1000);
+ 184   3            
+ 185   3            for(i=0;i<strlen(connect);i++){
+ 186   4              sendData(connect[i]);
+ 187   4            }
+ 188   3            delay(5000);
+ 189   3            
+ 190   3            for(i=0;i<strlen(send);i++){
+ 191   4              sendData(send[i]);
+ 192   4            }
+ 193   3            delay(1000);
+ 194   3            
+ 195   3            for(i=0;i<strlen(save);i++){
+ 196   4              sendData(save[i]);
+ 197   4            }
+ 198   3            delay(1000);
+ 199   3            
+ 200   3            sendData(end);
+ 201   3            delay(1000);
+ 202   3            
+ 203   3            for(i=0;i<strlen(close);i++){
+ 204   4              sendData(close[i]);
+ 205   4            }
+ 206   3            delay(1000);
+ 207   3            
+ 208   3            for(i=0;i<strlen(shut);i++){
+ 209   4              sendData(shut[i]);
+ 210   4            }
+ 211   3            gpsCount = 0;
+ 212   3          }
+ 213   2          
+ 214   2          if(ledTip >= 4){
+ 215   3            uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x02, 0x00,0xEF};
+ 216   3            play[6] = ledStatus ? 0x01 : 0x02;
+ 217   3            for(n = 0;n<8;n++){
+ 218   4              //sendData(play[n]);
+ 219   4            }
+ 220   3            ledTip = 0;
+ 221   3            delay(7000);
+ 222   3          }
+ 223   2          
+ 224   2          }
+ 225   1        }
+ 226            
 
 
 MODULE INFORMATION:   STATIC OVERLAYABLE
-   CODE SIZE        =    905    ----
-   CONSTANT SIZE    =     19    ----
-   XDATA SIZE       =    207      13
+   CODE SIZE        =   1326    ----
+   CONSTANT SIZE    =    128    ----
+   XDATA SIZE       =    207     117
    PDATA SIZE       =   ----    ----
    DATA SIZE        =   ----    ----
    IDATA SIZE       =   ----    ----
