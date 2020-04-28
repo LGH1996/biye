@@ -1,4 +1,4 @@
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 12:49:30 PAGE 1   
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 23:17:21 PAGE 1   
 
 
 C51 COMPILER V9.59.0.0, COMPILATION OF MODULE PROGREM_1
@@ -14,244 +14,234 @@ line level    source
    4          #include<string.h>
    5          
    6          #define uchar unsigned char
-   7          #define uint unsigned int
-   8          
-   9          sbit P1_1 = P1^1;
-  10          sbit P1_2 = P1^2;
-  11          sbit P2_0 = P2^0;
-  12          sbit P2_1 = P2^1;
-  13          bit ledStatus = 0;
+   7            
+   8          sbit P1_1 = P1^1;
+   9          sbit P1_2 = P1^2;
+  10          sbit P2_0 = P2^0;
+  11          sbit P2_1 = P2^1;
+  12          bit ledStatus = 0;
+  13          bit lastLedStatus = 0;
   14          bit newDistance = 0;
   15          uchar numWave = 0;
   16          uchar numLed = 0;
   17          uchar ledTip = 0;
-  18          uint lastDistance = 0;
-  19          
-  20          uchar gpsCount = 0;
-  21          uchar serialCount = 0;
-  22          uchar receive[100],save[100] = "is null";
+  18          uchar distanceCount = 0;
+  19          uchar lastRang = 0x00;
+  20          int lastDistance = 0;
+  21          
+  22          
   23          
-  24          
-  25          
-  26          void delay(uint i){
-  27   1        uint n;
-  28   1        for(n=0;n<i;n++){
-  29   2        _nop_();
-  30   2        }
-  31   1      }
-  32          
-  33          void sendData(uchar str){
-  34   1      
-  35   1        SBUF = str;
-  36   1        while(TI == 0);
-  37   1        TI = 0;
-  38   1        
-  39   1      }
-  40          
-  41          void Time0() interrupt 1 using 0{
-  42   1      
-  43   1        if(++numLed >= 5){
-  44   2          if(ledStatus != P2_0){
-  45   3            if(++ledTip >= 4){
-  46   4              ledStatus = P2_0;
-  47   4              P2_1 = !P2_0;
-  48   4            }
-  49   3          } else if(ledTip < 4) {
-  50   3            ledTip = 0;
-  51   3          }
-  52   2          if(ledStatus){
-  53   3            P2_1 = !P2_1;
-  54   3          }
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 12:49:30 PAGE 2   
+  24          void delay(unsigned int i){
+  25   1        unsigned int n;
+  26   1        for(n=0;n<i;n++){
+  27   2        _nop_();
+  28   2        }
+  29   1      }
+  30          
+  31          void sendData(uchar str){
+  32   1      
+  33   1        SBUF = str;
+  34   1        while(TI == 0);
+  35   1        TI = 0;
+  36   1        
+  37   1      }
+  38          
+  39          void Time0() interrupt 1 using 0{
+  40   1      
+  41   1        if(++numLed >= 5){
+  42   2          if(ledStatus != P2_0){
+  43   3            if(++ledTip >= 4){
+  44   4              ledStatus = P2_0;
+  45   4              P2_1 = !P2_0;
+  46   4            }
+  47   3          } else if(ledTip < 4) {
+  48   3            ledTip = 0;
+  49   3          }
+  50   2          if(ledStatus){
+  51   3            P2_1 = !P2_1;
+  52   3          }
+  53   2          numLed = 0;
+  54   2        }
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 23:17:21 PAGE 2   
 
-  55   2          numLed = 0;
-  56   2        }
-  57   1        
-  58   1        numWave++;
-  59   1        gpsCount++;
-  60   1        TH0 =0x4C;
-  61   1        TL0= 0x00;
-  62   1      }
-  63          
-  64          void Time2() interrupt 5 using 1{
-  65   1      
-  66   1        if(EXF2){
-  67   2          
-  68   2          uint distance = ((RCAP2H<<8|RCAP2L)*1.085)/58;
-  69   2          EXF2 = 0;
-  70   2          if(distance < (lastDistance-50) || distance > (lastDistance+50)){
-  71   3            lastDistance = distance;
-  72   3            newDistance = 1;
-  73   3          }
-  74   2          //TI = 1;
-  75   2          //printf("%d\n",distance);
-  76   2        }
-  77   1      }
-  78          
-  79          void serial_4() interrupt 4 using 3{
-  80   1          if(RI){
-  81   2            uchar temp = SBUF;
-  82   2            RI = 0;
-  83   2            receive[serialCount++] = temp;
-  84   2            if(temp == '\n'){
-  85   3              receive[serialCount] = 0;
-  86   3              if(receive[0]=='$' && receive[3] == 'G' && receive[4]=='G' && receive[5]=='A' && serialCount >=60 && s
-             -erialCount <80){
-  87   4                strcpy(save,receive);
-  88   4              }
-  89   3              serialCount = 0;
-  90   3              receive[0] = 0;
-  91   3            }
-  92   2          }
-  93   1      }
-  94          
-  95          void main(){
-  96   1      
-  97   1        EA = 1; 
-  98   1        
-  99   1        ET0 = 1; //开T0定时器
- 100   1        TR0 = 1;
- 101   1        TMOD |= 0x01;
- 102   1        TH0 =0x4C;
- 103   1        TL0= 0x00;
- 104   1        
- 105   1        TR1 = 1;//开T1定时器，作为串口的波特率发生器
- 106   1        TMOD |= 0x20;
- 107   1        TL1 = 0xFD;
- 108   1        TH1 = 0xFD;
- 109   1        
- 110   1        ET2 = 1;       //开T2捕获模式，测量超声波测距模块反馈的电压持续时间
- 111   1        TR2 = 1;
- 112   1        EXEN2 = 1;
- 113   1        CP_RL2 = 1;
- 114   1             
- 115   1        ES = 1;
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 12:49:30 PAGE 3   
+  55   1        
+  56   1        numWave++;
+  57   1        TH0 =0x4C;
+  58   1        TL0= 0x00;
+  59   1      }
+  60          
+  61          void Time2() interrupt 5 using 1{
+  62   1      
+  63   1        if(EXF2){
+  64   2          int distance = ((RCAP2H<<8|RCAP2L)*1.085)/58;
+  65   2          EXF2 = 0;
+  66   2          if(distance < (lastDistance-50) || distance > (lastDistance+50)){
+  67   3            lastDistance = distance;
+  68   3            distanceCount = 0;
+  69   3            newDistance = 1;
+  70   3          } else {
+  71   3            distanceCount++;
+  72   3          }
+  73   2        }
+  74   1      }
+  75          
+  76          void main(){
+  77   1      
+  78   1        EA = 1; 
+  79   1        
+  80   1        ET0 = 1; //开T0定时器
+  81   1        TR0 = 1;
+  82   1        TMOD |= 0x01;
+  83   1        TH0 =0x4C;
+  84   1        TL0= 0x00;
+  85   1        
+  86   1        TR1 = 1;//开T1定时器，作为串口的波特率发生器
+  87   1        TMOD |= 0x20;
+  88   1        TL1 = 0xFD;
+  89   1        TH1 = 0xFD;
+  90   1        
+  91   1        ET2 = 1;  //开T2捕获模式，测量超声波测距模块反馈的电压持续时间
+  92   1        TR2 = 1;
+  93   1        EXEN2 = 1;
+  94   1        CP_RL2 = 1;
+  95   1                 
+  96   1        SM0 = 0; //串口初始化
+  97   1        SM1 = 1;
+  98   1        REN = 1;
+  99   1        
+ 100   1        while(1){
+ 101   2          
+ 102   2          if(numWave >= 10){
+ 103   3            P1_2 = 0;
+ 104   3            delay(10);
+ 105   3            P1_2 = 1;
+ 106   3            while(P1_1 == 0);
+ 107   3            TH2 = 0x00;
+ 108   3            TL2 = 0x00;
+ 109   3            numWave = 0;
+ 110   3          }
+ 111   2          
+ 112   2          if(newDistance && distanceCount >= 2){
+ 113   3            
+ 114   3          uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x01, 0x00,0xEF},status[] = {0x7E, 0xFF, 0x06, 0x42, 0
+             -x00, 0x00, 0x00, 0xEF},reply[10];
+ 115   3          uchar curRang = 0x00;
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 23:17:21 PAGE 3   
 
- 116   1        SM0 = 0; //串口初始化
- 117   1        SM1 = 1;
- 118   1        REN = 1;
- 119   1        
- 120   1        while(1){
- 121   2          
- 122   2          if(numWave>=20){
- 123   3            P1_2 = 1;
- 124   3            delay(10);
- 125   3            P1_2 = 0;
- 126   3            while(P1_1 == 0);
- 127   3            TH2 = 0x00;
- 128   3            TL2 = 0x00;
- 129   3            numWave = 0;
- 130   3          }
- 131   2          
- 132   2          if(newDistance){
- 133   3      
- 134   3          uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x01, 0x00,0xEF};
- 135   3          uchar curRang = 0x00;
- 136   3          newDistance = 0;
- 137   3          
- 138   3          if(lastDistance>=25 && lastDistance<75){
- 139   4            curRang = 0x01;
- 140   4          }
- 141   3          if(lastDistance>=75 && lastDistance<125){
- 142   4            curRang = 0x02;
- 143   4          }
- 144   3          if(lastDistance>=125 && lastDistance<175){
- 145   4            curRang = 0x03;
- 146   4          }
- 147   3          if(lastDistance>=175 && lastDistance<225){
- 148   4            curRang = 0x04;
- 149   4          }
- 150   3          if(lastDistance>=225 && lastDistance<275){
- 151   4            curRang = 0x05;
- 152   4          }
- 153   3          if(lastDistance>=275 && lastDistance<325){
- 154   4            curRang = 0x06;
- 155   4          }
- 156   3          if(lastDistance>=325 && lastDistance<375){
- 157   4            curRang = 0x07;
- 158   4          }
- 159   3          if(lastDistance>=375 && lastDistance<425){
- 160   4            curRang = 0x08;
- 161   4          }
- 162   3      
- 163   3          play[6] = curRang;
- 164   3          for(n = 0;n<8;n++){
- 165   4            //sendData(play[n]);
- 166   4          }
- 167   3          delay(6800);
- 168   3        }
- 169   2          if(gpsCount >500){
- 170   3            //TI = 1;
- 171   3            //printf("%s",save);
- 172   3            //TI = 0;
- 173   3            uchar i,setApn[]="AT+CSTT=\"CMNET\"\n\r",ciicr[]="AT+CIICR\n\r", connect[] = "AT+CIPSTART=\"TCP\",\"120
-             -.78.203.170\",12777\n\r",send[] = "AT+CIPSEND\n\r",end = 0x1A,close[] = "AT+CIPCLOSE\n\r",shut[]="AT+CIPSHUT\n\r";
- 174   3      
- 175   3            for(i=0;i<strlen(setApn);i++){
- 176   4              sendData(setApn[i]);
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 12:49:30 PAGE 4   
+ 116   3          newDistance = 0;
+ 117   3          distanceCount = 0;
+ 118   3            
+ 119   3          for(n = 0;n<8;n++){
+ 120   4            sendData(status[n]);
+ 121   4          }
+ 122   3          
+ 123   3          for(n = 0;n<10;n++){
+ 124   4            unsigned int i = 0;
+ 125   4            bit a = 0;
+ 126   4            while(!RI){
+ 127   5              if(++i >= 1000){
+ 128   6                a = 1;
+ 129   6                break;
+ 130   6              }
+ 131   5            }
+ 132   4            reply[n] = a ? 0x01: SBUF;
+ 133   4            RI = 0;
+ 134   4          }
+ 135   3          
+ 136   3          if(reply[6] == 0x01){ 
+ 137   4            
+ 138   4            delay(1000);
+ 139   4            
+ 140   4          } else {
+ 141   4          
+ 142   4            if(lastDistance>=25 && lastDistance<75){
+ 143   5              curRang = 0x01;
+ 144   5            }
+ 145   4            if(lastDistance>=75 && lastDistance<125){
+ 146   5              curRang = 0x02;
+ 147   5            }
+ 148   4            if(lastDistance>=125 && lastDistance<175){
+ 149   5              curRang = 0x03;
+ 150   5            }
+ 151   4            if(lastDistance>=175 && lastDistance<225){
+ 152   5              curRang = 0x04;
+ 153   5            }
+ 154   4            if(lastDistance>=225 && lastDistance<275){
+ 155   5              curRang = 0x05;
+ 156   5            }
+ 157   4            if(lastDistance>=275 && lastDistance<325){
+ 158   5              curRang = 0x06;
+ 159   5            }
+ 160   4            if(lastDistance>=325 && lastDistance<375){
+ 161   5              curRang = 0x07;
+ 162   5            }
+ 163   4            if(lastDistance>=375 && lastDistance<425){
+ 164   5              curRang = 0x08;
+ 165   5            }
+ 166   4            if(lastDistance>=425 && lastDistance<475){
+ 167   5              curRang = 0x09;
+ 168   5            }
+ 169   4            if(lastDistance>=475 && lastDistance<525){
+ 170   5              curRang = 0x0A;
+ 171   5            }
+ 172   4            if(lastDistance>=525 && lastDistance<575){
+ 173   5              curRang = 0x0B;
+ 174   5            }
+ 175   4            
+ 176   4            if(curRang != 0x00 && curRang != lastRang){
+ 177   5              lastRang = curRang;
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         04/28/2020 23:17:21 PAGE 4   
 
- 177   4            }
- 178   3            delay(1000);
- 179   3            
- 180   3            for(i=0;i<strlen(ciicr);i++){
- 181   4              sendData(ciicr[i]);
- 182   4            }
- 183   3            delay(1000);
- 184   3            
- 185   3            for(i=0;i<strlen(connect);i++){
- 186   4              sendData(connect[i]);
- 187   4            }
- 188   3            delay(5000);
- 189   3            
- 190   3            for(i=0;i<strlen(send);i++){
- 191   4              sendData(send[i]);
- 192   4            }
- 193   3            delay(1000);
- 194   3            
- 195   3            for(i=0;i<strlen(save);i++){
- 196   4              sendData(save[i]);
- 197   4            }
- 198   3            delay(1000);
- 199   3            
- 200   3            sendData(end);
- 201   3            delay(1000);
- 202   3            
- 203   3            for(i=0;i<strlen(close);i++){
- 204   4              sendData(close[i]);
- 205   4            }
- 206   3            delay(1000);
- 207   3            
- 208   3            for(i=0;i<strlen(shut);i++){
- 209   4              sendData(shut[i]);
- 210   4            }
- 211   3            gpsCount = 0;
- 212   3          }
- 213   2          
- 214   2          if(ledTip >= 4){
- 215   3            uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x02, 0x00,0xEF};
- 216   3            play[6] = ledStatus ? 0x01 : 0x02;
- 217   3            for(n = 0;n<8;n++){
- 218   4              //sendData(play[n]);
- 219   4            }
- 220   3            ledTip = 0;
- 221   3            delay(7000);
- 222   3          }
- 223   2          
- 224   2          }
- 225   1        }
- 226            
+ 178   5              play[6] = curRang;
+ 179   5              for(n = 0;n<8;n++){
+ 180   6                sendData(play[n]);
+ 181   6              }
+ 182   5          }
+ 183   4        }
+ 184   3      } 
+ 185   2          
+ 186   2          if(ledTip >= 4){
+ 187   3            uchar n, play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x02, 0x00,0xEF}, status[] = {0x7E, 0xFF, 0x06, 0x42,
+             - 0x00, 0x00, 0x00, 0xEF},reply[10];
+ 188   3            for(n = 0;n<8;n++){
+ 189   4              sendData(status[n]);
+ 190   4            }
+ 191   3            for(n = 0;n<10;n++){
+ 192   4              unsigned int i = 0;
+ 193   4              bit a = 0;
+ 194   4              while(!RI){
+ 195   5                if(++i >= 1000){
+ 196   6                  a = 1;
+ 197   6                  break;
+ 198   6                }
+ 199   5              }
+ 200   4              reply[n] = a ? 0x01: SBUF;
+ 201   4              RI = 0;
+ 202   4            }
+ 203   3            if(reply[6] == 0x01){
+ 204   4              delay(1000);
+ 205   4            } else if(ledStatus != lastLedStatus){
+ 206   4            play[6] = ledStatus ? 0x01 : 0x02;
+ 207   4            for(n = 0;n<8;n++){
+ 208   5              sendData(play[n]);
+ 209   5            }
+ 210   4            lastLedStatus = ledStatus;
+ 211   4            ledTip = 0;
+ 212   4            }
+ 213   3          }
+ 214   2          
+ 215   2          } 
+ 216   1        }
 
 
 MODULE INFORMATION:   STATIC OVERLAYABLE
-   CODE SIZE        =   1326    ----
-   CONSTANT SIZE    =    128    ----
-   XDATA SIZE       =    207     117
+   CODE SIZE        =   1206    ----
+   CONSTANT SIZE    =     32    ----
+   XDATA SIZE       =      7      32
    PDATA SIZE       =   ----    ----
    DATA SIZE        =   ----    ----
    IDATA SIZE       =   ----    ----
-   BIT SIZE         =      2    ----
+   BIT SIZE         =      3       1
 END OF MODULE INFORMATION.
 
 
