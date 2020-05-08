@@ -1,36 +1,44 @@
 #include <reg52.h>
 #include <intrins.h>
-#include <stdio.h>
-#include <string.h>
 
+#define IAP_ADDR 0x4000 //内部REPPROM存储语音模块音量值的地址
 #define uchar unsigned char
+#define uint unsigned int
 
-sfr WDT_CONTR = 0xE1;
-sbit P1_1 = P1 ^ 1;
-sbit P1_2 = P1 ^ 2;
+sfr WDT_CONTR = 0xE1; //定义看门狗控制寄存器
+sfr IAP_DATA = 0xE2;  //定义操作EPPROM相关的特殊功能寄存器
+sfr IAP_ADDRH = 0xE3;
+sfr IAP_ADDRL = 0xE4;
+sfr IAP_CMD = 0xE5;
+sfr IAP_TRIG = 0xE6;
+sfr IAP_CONTR = 0xE7;
+sbit Echo = P1 ^ 1; //定义各类引脚
+sbit Trig = P1 ^ 2;
 sbit P2_0 = P2 ^ 0;
 sbit P2_1 = P2 ^ 1;
-bit ledStatus = 0;
-bit newDistance = 0;
-uchar numWave = 0;
-uchar numLed = 0;
-uchar ledTip = 0;
-uchar distanceCount = 0;
-uchar lastRang = 0x00;
-int lastDistance = 0;
+bit lightStatus = 0; //定义各类标志位和辅助变量
+bit distanceNew = 0;
+uchar distanceNum = 0;
+uchar lightNum = 0;
+uchar lightStatusNum = 0;
+uchar distanceNewNum = 0;
+uchar distanceLastRange = 0x00;
+int distanceLast = 0;
+uchar mediaCommand[] = {0x7E, 0xFF, 0x06, 0x00, 0x00, 0x00, 0x00, 0xEF}; //语音播放模块的指令
+uchar volume = 0x0f; //语音模块的当前声音大小
 
-void delay(unsigned int i)
+void delay(uint i) //延时函数
 {
-	unsigned int n;
+	uint n;
 	for (n = 0; n < i; n++)
 	{
 		_nop_();
 	}
 }
 
-void sendData(uchar str[], uchar lenth)
+void sendData(uchar str[], uchar lenth) //向串行口发送数据
 {
-	unsigned int n;
+	uint n;
 	for (n = 0; n < lenth; n++)
 	{
 		SBUF = str[n];
@@ -40,184 +48,253 @@ void sendData(uchar str[], uchar lenth)
 	}
 }
 
-void Time0() interrupt 1 using 0
+void IapIdle() //进入待机模式，无ISP/IAP操作
+{
+	IAP_CONTR = 0;
+	IAP_CMD = 0;
+	IAP_TRIG = 0;
+	IAP_ADDRH = 0x80;
+	IAP_ADDRL = 0;
+}
+
+uchar IapReadByte(uint addr) //对内部RPPROM进行读取数据操作
+{
+	uchar dat;
+	IAP_CONTR = 0x81;
+	IAP_CMD = 0x01;
+	IAP_ADDRL = addr;
+	IAP_ADDRH = addr >> 8;
+	IAP_TRIG = 0x46;
+	IAP_TRIG = 0xb9;
+	_nop_();
+	dat = IAP_DATA;
+	IapIdle();
+	return dat;
+}
+
+void IapProgramByte(uint addr, uchar dat) //对内部REPPROM进行写入数据操作
+{
+	IAP_CONTR = 0x81;
+	IAP_CMD = 0x02;
+	IAP_ADDRL = addr;
+	IAP_ADDRH = addr >> 8;
+	IAP_DATA = dat;
+	IAP_TRIG = 0x46;
+	IAP_TRIG = 0xb9;
+	_nop_();
+	IapIdle();
+}
+
+void IapEraseSector(uint addr) //擦除内部EPPROM的指定扇区
+{
+	IAP_CONTR = 0x81;
+	IAP_CMD = 0x03;
+	IAP_ADDRL = addr;
+	IAP_ADDRH = addr >> 8;
+	IAP_TRIG = 0x46;
+	IAP_TRIG = 0xb9;
+	_nop_();
+	IapIdle();
+}
+
+void Time0() interrupt 1 using 0 //定时器T0中断函数
 {
 
-	if (++numLed >= 5)
+	if (++lightNum >= 5) //检查外部光线强度的变化
 	{
-		if (P2_0 != ledStatus)
+		if (P2_0 != lightStatus)
 		{
-			ledTip++;
+			lightStatusNum++;
 		}
 		else
 		{
-			ledTip = 0;
+			lightStatusNum = 0;
 		}
-		if (ledStatus)
+		if (lightStatus)
 		{
-			P2_1 = !P2_1;
+			P2_1 = !P2_1; //指示灯闪烁
 		}
-		numLed = 0;
-		WDT_CONTR = 0x37;
+		lightNum = 0;
+		WDT_CONTR = 0x37; //问看门狗
 	}
-	numWave++;
-	TH0 = 0x4C;
+	distanceNum++;
+	TH0 = 0x4C; //重新装载初值
 	TL0 = 0x00;
 }
 
-void Time2() interrupt 5 using 1
+void Time2() interrupt 5 using 1 //定时器T2的中断函数
 {
 
-	if (EXF2)
+	if (EXF2) //使用定时器T2的捕获模式
 	{
-		int distance = ((RCAP2H << 8 | RCAP2L) * 1.085) / 58;
+		double rcap = (RCAP2H << 8 | RCAP2L); //获取发生中断时的TH2和TL2的值
+		int distance = (rcap * (12 / 11.0592) * 0.034) / 2; //计算出与障碍物的距离
 		EXF2 = 0;
-		if (distance < (lastDistance - 50) || distance > (lastDistance + 50))
+		if (distance < (distanceLast - 50) || distance > (distanceLast + 50)) //判断与障碍的距离是否发生了较大的变化
 		{
-			lastDistance = distance;
-			distanceCount = 0;
-			newDistance = 1;
+			distanceLast = distance;
+			distanceNewNum = 0;
+			distanceNew = 1;
 		}
 		else
 		{
-			distanceCount++;
+			distanceNewNum++;
 		}
 	}
 }
 
-void exter_0() interrupt 0 using 2
+void external_0() interrupt 0 using 2 //外部中断INT0的中断函数，语音模块音量加1
 {
-	uchar volumnUp[] = {0x7E, 0xFF, 0x06, 0x04, 0x00, 0x00, 0x00, 0xEF};
-	sendData(volumnUp, 8);
+	if (volume < 30)
+	{
+		mediaCommand[3] = 0x06;
+		mediaCommand[6] = ++volume;
+		sendData(mediaCommand, 8);
+		IapEraseSector(IAP_ADDR);
+		IapProgramByte(IAP_ADDR, volume);
+	}
 }
 
-void exter_1() interrupt 2 using 2
+void external_1() interrupt 2 using 2 //外部中断INT1的中断函数，语音模块音量减1
 {
-	uchar volumnDown[] = {0x7E, 0xFF, 0x06, 0x05, 0x00, 0x00, 0x00, 0xEF};
-	sendData(volumnDown, 8);
+	if (volume > 5)
+	{
+		mediaCommand[3] = 0x06;
+		mediaCommand[6] = --volume;
+		sendData(mediaCommand, 8);
+		IapEraseSector(IAP_ADDR);
+		IapProgramByte(IAP_ADDR, volume);
+	}
 }
 
 void main()
 {
 
-	EA = 1;
+	EA = 1; //开总中断
 
-	ET0 = 1; //��T0��ʱ��
+	ET0 = 1; //开T0中断
 	TR0 = 1;
 	TMOD |= 0x01;
 	TH0 = 0x4C;
 	TL0 = 0x00;
 
-	TR1 = 1; //��T1��ʱ������Ϊ���ڵĲ����ʷ�����
+	TR1 = 1; //设置定时器T1为波特率发生器
 	TMOD |= 0x20;
 	TL1 = 0xFD;
 	TH1 = 0xFD;
 
-	ET2 = 1; //��T2����ģʽ���������������ģ�鷴���ĵ�ѹ����ʱ��
+	ET2 = 1; //开定时器/计数器T2的捕获模式
 	TR2 = 1;
 	EXEN2 = 1;
 	CP_RL2 = 1;
 
-	SM0 = 0; //���ڳ�ʼ��
+	SM0 = 0; //设置串行口通讯的工作模式
 	SM1 = 1;
 	REN = 1;
 
-	EX0 = 1; //���ⲿ�ж�0��1
+	EX0 = 1; //开外部中断INT0和INT1
 	EX1 = 1;
 	IT0 = 1;
 	IT1 = 1;
 
-	WDT_CONTR = 0x37; //�������Ź�
+	WDT_CONTR = 0x37; //开看门狗，在受到干扰使程序跑飞时自动复位
+
+	delay(10000); //等待语音模块启动完毕后
+	volume = IapReadByte(IAP_ADDR);
+	mediaCommand[3] = 0x06;
+	mediaCommand[6] = volume;
+	sendData(mediaCommand, 8); //初始化语音模块的音量大小
 
 	while (1)
 	{
 
-		if (numWave >= 10)
+		if (distanceNum >= 10) //在间隔一定的时间后向测距模块发送高电平脉冲
 		{
-			P1_2 = 0;
+			Trig = 0;
 			delay(10);
-			P1_2 = 1;
-			while (P1_1 == 0)
-				;
+			Trig = 1;
+			while (!Echo)
+				; //等待测距模块返回高电平信号
 			TH2 = 0x00;
 			TL2 = 0x00;
-			numWave = 0;
+			distanceNum = 0; //喂看门狗
 			WDT_CONTR = 0x37;
 		}
 
-		if (newDistance && distanceCount >= 2)
+		if (distanceNew && distanceNewNum >= 2) //如果测距的数据发生新的变化
 		{
+			uchar distanceCurRange = 0x00;
 
-			uchar play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x01, 0x00, 0xEF};
-			uchar curRang = 0x00;
-
-			if (lastDistance >= 25 && lastDistance < 75)
+			if (distanceLast >= 25 && distanceLast < 75) //根据新的测距数据确定要播放的语音文件
 			{
-				curRang = 0x01;
+				distanceCurRange = 0x01;
 			}
-			if (lastDistance >= 75 && lastDistance < 125)
+			if (distanceLast >= 75 && distanceLast < 125)
 			{
-				curRang = 0x02;
+				distanceCurRange = 0x02;
 			}
-			if (lastDistance >= 125 && lastDistance < 175)
+			if (distanceLast >= 125 && distanceLast < 175)
 			{
-				curRang = 0x03;
+				distanceCurRange = 0x03;
 			}
-			if (lastDistance >= 175 && lastDistance < 225)
+			if (distanceLast >= 175 && distanceLast < 225)
 			{
-				curRang = 0x04;
+				distanceCurRange = 0x04;
 			}
-			if (lastDistance >= 225 && lastDistance < 275)
+			if (distanceLast >= 225 && distanceLast < 275)
 			{
-				curRang = 0x05;
+				distanceCurRange = 0x05;
 			}
-			if (lastDistance >= 275 && lastDistance < 325)
+			if (distanceLast >= 275 && distanceLast < 325)
 			{
-				curRang = 0x06;
+				distanceCurRange = 0x06;
 			}
-			if (lastDistance >= 325 && lastDistance < 375)
+			if (distanceLast >= 325 && distanceLast < 375)
 			{
-				curRang = 0x07;
+				distanceCurRange = 0x07;
 			}
-			if (lastDistance >= 375 && lastDistance < 425)
+			if (distanceLast >= 375 && distanceLast < 425)
 			{
-				curRang = 0x08;
+				distanceCurRange = 0x08;
 			}
-			if (lastDistance >= 425 && lastDistance < 475)
+			if (distanceLast >= 425 && distanceLast < 475)
 			{
-				curRang = 0x09;
+				distanceCurRange = 0x09;
 			}
-			if (lastDistance >= 475 && lastDistance < 525)
+			if (distanceLast >= 475 && distanceLast < 525)
 			{
-				curRang = 0x0A;
+				distanceCurRange = 0x0A;
 			}
-			if (lastDistance >= 525 && lastDistance < 575)
+			if (distanceLast >= 525 && distanceLast < 575)
 			{
-				curRang = 0x0B;
+				distanceCurRange = 0x0B;
 			}
 
-			if (curRang != 0x00 && curRang != lastRang)
+			if (distanceCurRange != 0x00 && distanceCurRange != distanceLastRange) //如果前方有障碍物或已经还没提示过了，则发送相关指令
 			{
-				lastRang = curRang;
-				play[6] = curRang;
-				sendData(play, 8);
+				distanceLastRange = distanceCurRange;
+				mediaCommand[3] = 0x0F;
+				mediaCommand[5] = 0x01;
+				mediaCommand[6] = distanceCurRange;
+				sendData(mediaCommand, 8); //向语音模块发送指令
 				delay(13500);
-				WDT_CONTR = 0x37;
+				WDT_CONTR = 0x37; //喂看门狗
 			}
-			newDistance = 0;
-			distanceCount = 0;
+			distanceNew = 0;
+			distanceNewNum = 0;
 		}
 
-		if (ledTip >= 10)
+		if (lightStatusNum >= 10) //如果外部环境亮度发生了变化，且持续了一段时间
 		{
-			uchar play[8] = {0x7E, 0xFF, 0x06, 0x0F, 0x00, 0x02, 0x00, 0xEF};
-			ledStatus = P2_0;
+			lightStatus = P2_0;
 			P2_1 = !P2_0;
-			play[6] = ledStatus ? 0x01 : 0x02;
-			sendData(play, 8);
+			mediaCommand[3] = 0x0F;
+			mediaCommand[5] = 0x02;
+			mediaCommand[6] = lightStatus ? 0x01 : 0x02;
+			sendData(mediaCommand, 8); //向语音模块发送指令
 			delay(13500);
-			WDT_CONTR = 0x37;
-			ledTip = 0;
+			WDT_CONTR = 0x37; //喂看门狗
+			lightStatusNum = 0;
 		}
 	}
 }

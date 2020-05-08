@@ -1,0 +1,15 @@
+@startuml
+repeat:向测距模块发送驱动脉冲;
+->捕获;
+:获取返回脉冲宽度;
+:计算与障碍物距离;
+if(有障碍物？) then(false)
+else(true)
+if(已经提示过？) then(false)
+:播放语音提示;
+else(false)
+endif
+endif
+backward:延迟一定的时间;
+repeat while
+@enduml
