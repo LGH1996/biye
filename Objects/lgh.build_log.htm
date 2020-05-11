@@ -22,19 +22,23 @@ Dialog DLL:      TP51.DLL V2.60.0.0
  
 <h2>Project:</h2>
 C:\Users\22814\Desktop\单片机测试文件夹\0412\lgh.uvproj
-Project File Date:  05/08/2020
+Project File Date:  05/09/2020
 
 <h2>Output:</h2>
 Build target 'Target 1'
 linking...
-*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
-    SEGMENT: ?PR?_DELAY?QQQQQQQQQQ
-*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
-    SEGMENT: ?PR?_SENDDATA?QQQQQQQQQQ
-Program Size: data=9.0 xdata=4 code=198
+*** WARNING L15: MULTIPLE CALL TO SEGMENT
+    SEGMENT: ?PR?_SENDDATA?PROGREM_1
+    CALLER1: ?C_C51STARTUP
+    CALLER2: ?PR?EXTERNAL_0?PROGREM_1
+*** WARNING L15: MULTIPLE CALL TO SEGMENT
+    SEGMENT: ?PR?_SENDDATA?PROGREM_1
+    CALLER1: ?PR?EXTERNAL_0?PROGREM_1
+    CALLER2: ?PR?EXTERNAL_1?PROGREM_1
+Program Size: data=33.2 xdata=270 code=3069
 creating hex file from ".\Objects\lgh"...
 ".\Objects\lgh" - 0 Error(s), 2 Warning(s).
-Build Time Elapsed:  00:00:01
+Build Time Elapsed:  00:00:00
 </pre>
 </body>
 </html>

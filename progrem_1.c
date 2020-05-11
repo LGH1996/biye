@@ -1,5 +1,6 @@
 #include <reg52.h>
 #include <intrins.h>
+#include <string.h>
 
 #define IAP_ADDR 0x4000 //内部REPPROM存储语音模块音量值的地址
 #define uchar unsigned char
@@ -25,7 +26,13 @@ uchar distanceNewNum = 0;
 uchar distanceLastRange = 0x00;
 int distanceLast = 0;
 uchar mediaCommand[] = {0x7E, 0xFF, 0x06, 0x00, 0x00, 0x00, 0x00, 0xEF}; //语音播放模块的指令
-uchar volume = 0x0f; //语音模块的当前声音大小
+uchar volume = 0x0f;//语音模块的当前声音大小
+uchar *gsmCmd[10] = {"AT+CIPSHUT\n", "AT+CGATT?\n", "AT+CSTT=\"CMNET\"\n",
+					 "AT+CIICR\n", "AT+CIFSR\n", "AT+CIPSTART=\"TCP\",\"120.78.203.170\",\"12777\"\n",
+					 "AT+CIPSEND\n", "gps", "\x1A", "AT+CIPCLOSE\n"}; //循环发送的AT指令
+uchar gsmNum = 0, gsmIndex = 0;	//控制AT指令的发送顺序
+uint receiveCount = 0;
+uchar receive[100], gpsSave[100]; //接收和保存GPS定位数据
 
 void delay(uint i) //延时函数
 {
@@ -46,6 +53,15 @@ void sendData(uchar str[], uchar lenth) //向串行口发送数据
 			;
 		TI = 0;
 	}
+}
+
+void sendAt() //发送AT指令
+{
+	sendData(gsmCmd[gsmIndex], strlen(gsmCmd[gsmIndex]));
+	gsmNum = 0;
+	gsmIndex++;
+	gsmIndex %= 10;
+	delay(1000);
 }
 
 void IapIdle() //进入待机模式，无ISP/IAP操作
@@ -115,8 +131,9 @@ void Time0() interrupt 1 using 0 //定时器T0中断函数
 			P2_1 = !P2_1; //指示灯闪烁
 		}
 		lightNum = 0;
-		WDT_CONTR = 0x37; //问看门狗
 	}
+
+	gsmNum++;
 	distanceNum++;
 	TH0 = 0x4C; //重新装载初值
 	TL0 = 0x00;
@@ -127,7 +144,7 @@ void Time2() interrupt 5 using 1 //定时器T2的中断函数
 
 	if (EXF2) //使用定时器T2的捕获模式
 	{
-		double rcap = (RCAP2H << 8 | RCAP2L); //获取发生中断时的TH2和TL2的值
+		double rcap = (RCAP2H << 8 | RCAP2L);				//获取发生中断时的TH2和TL2的值
 		int distance = (rcap * (12 / 11.0592) * 0.034) / 2; //计算出与障碍物的距离
 		EXF2 = 0;
 		if (distance < (distanceLast - 50) || distance > (distanceLast + 50)) //判断与障碍的距离是否发生了较大的变化
@@ -139,6 +156,26 @@ void Time2() interrupt 5 using 1 //定时器T2的中断函数
 		else
 		{
 			distanceNewNum++;
+		}
+	}
+}
+
+void serial_4() interrupt 4 using 3 //UART中断，主要用来接收GPS模块的定位数据
+{
+	if (RI)
+	{
+		uchar temp = SBUF;
+		RI = 0;
+		receive[receiveCount++] = temp;
+		if (temp == '\n')
+		{
+			receive[receiveCount] = 0;
+			if (receive[0] == '$' && receive[3] == 'G' && receive[4] == 'G' && receive[5] == 'A' && receiveCount >= 50 && receiveCount < 100)
+			{
+				strcpy(gpsSave, receive);
+			}
+			receiveCount = 0;
+			receive[0] = 0;
 		}
 	}
 }
@@ -188,7 +225,8 @@ void main()
 	EXEN2 = 1;
 	CP_RL2 = 1;
 
-	SM0 = 0; //设置串行口通讯的工作模式
+	ES = 1; //开UART中断，设置串行口通讯的工作模式
+	SM0 = 0;
 	SM1 = 1;
 	REN = 1;
 
@@ -199,7 +237,11 @@ void main()
 
 	WDT_CONTR = 0x37; //开看门狗，在受到干扰使程序跑飞时自动复位
 
-	delay(10000); //等待语音模块启动完毕后
+	memset(receive, 0, 100);
+	memset(gpsSave, 0, 100);
+	gsmCmd[7] = gpsSave;
+
+	delay(20000); //等待语音模块启动完毕后
 	volume = IapReadByte(IAP_ADDR);
 	mediaCommand[3] = 0x06;
 	mediaCommand[6] = volume;
@@ -295,6 +337,69 @@ void main()
 			delay(13500);
 			WDT_CONTR = 0x37; //喂看门狗
 			lightStatusNum = 0;
+		}
+		switch (gsmIndex) //分别控制每条AT指令的发送间隔时间
+		{
+		case 0: //AT+CIPSHUT
+			if (gsmNum > 10)
+			{
+				sendAt();
+			}
+			break;
+		case 1: //AT+CGATT?
+			if (gsmNum > 10)
+			{
+				sendAt();
+			}
+			break;
+		case 2: //AT+CSTT="CMNET"
+			if (gsmNum > 10)
+			{
+				sendAt();
+			}
+			break;
+		case 3: //AT+CIICR
+			if (gsmNum > 50)
+			{
+				sendAt();
+			}
+			break;
+		case 4: //AT+CIFSR
+			if (gsmNum > 50)
+			{
+				sendAt();
+			}
+			break;
+		case 5: //AT+CIPSTART="TCP","120.78.203.170","12777"
+			if (gsmNum > 10)
+			{
+				sendAt();
+			}
+			break;
+		case 6: //AT+CIPSEND
+			if (gsmNum > 150)
+			{
+				sendAt();
+			}
+			break;
+		case 7: //gps定位数据
+			if (gsmNum > 50)
+			{
+				sendAt();
+			}
+			break;
+		case 8: //0x1A
+			if (gsmNum > 5)
+			{
+				sendAt();
+			}
+			break;
+		case 9: //AT+CIPCLOSE
+			if (gsmNum > 10)
+			{
+				sendAt();
+			}
+			break;
 		}
 	}
 }

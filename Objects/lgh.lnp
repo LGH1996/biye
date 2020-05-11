@@ -1,4 +1,4 @@
 ".\Objects\STARTUP.obj",
-".\Objects\qqqqqqqqqq.obj" 
+".\Objects\progrem_1.obj" 
 TO ".\Objects\lgh" 
 PRINT(".\Listings\lgh.m51") RAMSIZE(256) 
