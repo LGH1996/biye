@@ -1,4 +1,4 @@
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/11/2020 21:38:31 PAGE 1   
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/13/2020 10:30:03 PAGE 1   
 
 
 C51 COMPILER V9.59.0.0, COMPILATION OF MODULE PROGREM_1
@@ -11,433 +11,468 @@ line level    source
    1          #include <reg52.h>
    2          #include <intrins.h>
    3          #include <string.h>
-   4          
-   5          #define IAP_ADDR 0x4000 //内部REPPROM存储语音模块音量值的地址
-   6          #define uchar unsigned char
-   7          #define uint unsigned int
-   8          
-   9          sfr WDT_CONTR = 0xE1; //定义看门狗控制寄存器
-  10          sfr IAP_DATA = 0xE2;  //定义操作EPPROM相关的特殊功能寄存器
-  11          sfr IAP_ADDRH = 0xE3;
-  12          sfr IAP_ADDRL = 0xE4;
-  13          sfr IAP_CMD = 0xE5;
-  14          sfr IAP_TRIG = 0xE6;
-  15          sfr IAP_CONTR = 0xE7;
-  16          sbit Echo = P1 ^ 1; //定义各类引脚
-  17          sbit Trig = P1 ^ 2;
-  18          sbit P2_0 = P2 ^ 0;
-  19          sbit P2_1 = P2 ^ 1;
-  20          bit lightStatus = 0; //定义各类标志位和辅助变量
-  21          bit distanceNew = 0;
-  22          uchar distanceNum = 0;
-  23          uchar lightNum = 0;
-  24          uchar lightStatusNum = 0;
-  25          uchar distanceNewNum = 0;
-  26          uchar distanceLastRange = 0x00;
-  27          int distanceLast = 0;
-  28          uchar mediaCommand[] = {0x7E, 0xFF, 0x06, 0x00, 0x00, 0x00, 0x00, 0xEF}; //语音播放模块的指令
-  29          uchar volume = 0x0f;//语音模块的当前声音大小
-  30          uchar *gsmCmd[10] = {"AT+CIPSHUT\n", "AT+CGATT?\n", "AT+CSTT=\"CMNET\"\n",
-  31                     "AT+CIICR\n", "AT+CIFSR\n", "AT+CIPSTART=\"TCP\",\"120.78.203.170\",\"12777\"\n",
-  32                     "AT+CIPSEND\n", "gps", "\x1A", "AT+CIPCLOSE\n"}; //循环发送的AT指令
-  33          uchar gsmNum = 0, gsmIndex = 0; //控制AT指令的发送顺序
-  34          uint receiveCount = 0;
-  35          uchar receive[100], gpsSave[100]; //接收和保存GPS定位数据
-  36          
-  37          void delay(uint i) //延时函数
-  38          {
-  39   1        uint n;
-  40   1        for (n = 0; n < i; n++)
-  41   1        {
-  42   2          _nop_();
-  43   2        }
-  44   1      }
-  45          
-  46          void sendData(uchar str[], uchar lenth) //向串行口发送数据
-  47          {
-  48   1        uint n;
-  49   1        for (n = 0; n < lenth; n++)
-  50   1        {
-  51   2          SBUF = str[n];
-  52   2          while (TI == 0)
-  53   2            ;
-  54   2          TI = 0;
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/11/2020 21:38:31 PAGE 2   
+   4          #include <stdio.h>
+   5          
+   6          #define IAP_ADDR 0x4000 //内部REPPROM存储语音模块音量值的地址
+   7          #define uchar unsigned char
+   8          #define uint unsigned int
+   9          
+  10          sfr WDT_CONTR = 0xE1; //定义看门狗控制寄存器
+  11          sfr IAP_DATA = 0xE2;  //定义操作EPPROM相关的特殊功能寄存器
+  12          sfr IAP_ADDRH = 0xE3;
+  13          sfr IAP_ADDRL = 0xE4;
+  14          sfr IAP_CMD = 0xE5;
+  15          sfr IAP_TRIG = 0xE6;
+  16          sfr IAP_CONTR = 0xE7;
+  17          sbit Echo = P1 ^ 1; //定义各类引脚
+  18          sbit Trig = P1 ^ 2;
+  19          sbit P2_0 = P2 ^ 0;
+  20          sbit P2_1 = P2 ^ 1;
+  21          bit lightStatus = 0; //定义各类标志位和辅助变量
+  22          bit distanceNew = 0;
+  23          bit test = 1;
+  24          uchar distanceNum = 0;
+  25          uchar lightNum = 0;
+  26          uchar lightStatusNum = 0;
+  27          uchar distanceNewNum = 0;
+  28          uchar distanceLastRange = 0x00;
+  29          uint distanceLast = 0;
+  30          uchar mediaCommand[] = {0x7E, 0xFF, 0x06, 0x00, 0x00, 0x00, 0x00, 0xEF}; //语音播放模块的指令
+  31          uint volume = 0x0f;//语音模块的当前声音大小
+  32          uchar *gsmCmd[10] = {"AT+CIPSHUT\n", "AT+CGATT?\n", "AT+CSTT=\"CMNET\"\n",
+  33                     "AT+CIICR\n", "AT+CIFSR\n", "AT+CIPSTART=\"TCP\",\"120.78.203.170\",\"12777\"\n",
+  34                     "AT+CIPSEND\n", "gps", "\x1A", "AT+CIPCLOSE\n"}; //循环发送的AT指令
+  35          uchar gsmNum = 0, gsmIndex = 0; //控制AT指令的发送顺序
+  36          uint receiveCount = 0;
+  37          uchar receive[100], gpsSave[100]; //接收和保存GPS定位数据
+  38          
+  39          void delay(uint i) //延时函数
+  40          {
+  41   1        uint n;
+  42   1        for (n = 0; n < i; n++)
+  43   1        {
+  44   2          _nop_();
+  45   2        }
+  46   1      }
+  47          
+  48          void sendData(uchar str[], uchar lenth) //向串行口发送数据
+  49          {
+  50   1        uint n;
+  51   1        for (n = 0; n < lenth; n++)
+  52   1        {
+  53   2          SBUF = str[n];
+  54   2          while (TI == 0)
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/13/2020 10:30:03 PAGE 2   
 
-  55   2        }
-  56   1      }
-  57          
-  58          void sendAt() //发送AT指令
-  59          {
-  60   1        sendData(gsmCmd[gsmIndex], strlen(gsmCmd[gsmIndex]));
-  61   1        gsmNum = 0;
-  62   1        gsmIndex++;
-  63   1        gsmIndex %= 10;
-  64   1        delay(1000);
-  65   1      }
-  66          
-  67          void IapIdle() //进入待机模式，无ISP/IAP操作
-  68          {
-  69   1        IAP_CONTR = 0;
-  70   1        IAP_CMD = 0;
-  71   1        IAP_TRIG = 0;
-  72   1        IAP_ADDRH = 0x80;
-  73   1        IAP_ADDRL = 0;
-  74   1      }
-  75          
-  76          uchar IapReadByte(uint addr) //对内部RPPROM进行读取数据操作
-  77          {
-  78   1        uchar dat;
-  79   1        IAP_CONTR = 0x81;
-  80   1        IAP_CMD = 0x01;
-  81   1        IAP_ADDRL = addr;
-  82   1        IAP_ADDRH = addr >> 8;
-  83   1        IAP_TRIG = 0x46;
-  84   1        IAP_TRIG = 0xb9;
-  85   1        _nop_();
-  86   1        dat = IAP_DATA;
-  87   1        IapIdle();
-  88   1        return dat;
-  89   1      }
-  90          
-  91          void IapProgramByte(uint addr, uchar dat) //对内部REPPROM进行写入数据操作
-  92          {
-  93   1        IAP_CONTR = 0x81;
-  94   1        IAP_CMD = 0x02;
-  95   1        IAP_ADDRL = addr;
-  96   1        IAP_ADDRH = addr >> 8;
-  97   1        IAP_DATA = dat;
-  98   1        IAP_TRIG = 0x46;
-  99   1        IAP_TRIG = 0xb9;
- 100   1        _nop_();
- 101   1        IapIdle();
- 102   1      }
- 103          
- 104          void IapEraseSector(uint addr) //擦除内部EPPROM的指定扇区
- 105          {
- 106   1        IAP_CONTR = 0x81;
- 107   1        IAP_CMD = 0x03;
- 108   1        IAP_ADDRL = addr;
- 109   1        IAP_ADDRH = addr >> 8;
- 110   1        IAP_TRIG = 0x46;
- 111   1        IAP_TRIG = 0xb9;
- 112   1        _nop_();
- 113   1        IapIdle();
- 114   1      }
- 115          
- 116          void Time0() interrupt 1 using 0 //定时器T0中断函数
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/11/2020 21:38:31 PAGE 3   
+  55   2            ;
+  56   2          TI = 0;
+  57   2        }
+  58   1      }
+  59          
+  60          void sendAt() //发送AT指令
+  61          {
+  62   1        sendData(gsmCmd[gsmIndex], strlen(gsmCmd[gsmIndex]));
+  63   1        gsmNum = 0;
+  64   1        gsmIndex++;
+  65   1        gsmIndex %= 10;
+  66   1        delay(1000);
+  67   1      }
+  68          
+  69          void IapIdle() //进入待机模式，无ISP/IAP操作
+  70          {
+  71   1        IAP_CONTR = 0;
+  72   1        IAP_CMD = 0;
+  73   1        IAP_TRIG = 0;
+  74   1        IAP_ADDRH = 0x80;
+  75   1        IAP_ADDRL = 0;
+  76   1      }
+  77          
+  78          uchar IapReadByte(uint addr) //对内部RPPROM进行读取数据操作
+  79          {
+  80   1        uchar dat;
+  81   1        IAP_CONTR = 0x81;
+  82   1        IAP_CMD = 0x01;
+  83   1        IAP_ADDRL = addr;
+  84   1        IAP_ADDRH = addr >> 8;
+  85   1        IAP_TRIG = 0x46;
+  86   1        IAP_TRIG = 0xb9;
+  87   1        _nop_();
+  88   1        dat = IAP_DATA;
+  89   1        IapIdle();
+  90   1        return dat;
+  91   1      }
+  92          
+  93          void IapProgramByte(uint addr, uchar dat) //对内部REPPROM进行写入数据操作
+  94          {
+  95   1        IAP_CONTR = 0x81;
+  96   1        IAP_CMD = 0x02;
+  97   1        IAP_ADDRL = addr;
+  98   1        IAP_ADDRH = addr >> 8;
+  99   1        IAP_DATA = dat;
+ 100   1        IAP_TRIG = 0x46;
+ 101   1        IAP_TRIG = 0xb9;
+ 102   1        _nop_();
+ 103   1        IapIdle();
+ 104   1      }
+ 105          
+ 106          void IapEraseSector(uint addr) //擦除内部EPPROM的指定扇区
+ 107          {
+ 108   1        IAP_CONTR = 0x81;
+ 109   1        IAP_CMD = 0x03;
+ 110   1        IAP_ADDRL = addr;
+ 111   1        IAP_ADDRH = addr >> 8;
+ 112   1        IAP_TRIG = 0x46;
+ 113   1        IAP_TRIG = 0xb9;
+ 114   1        _nop_();
+ 115   1        IapIdle();
+ 116   1      }
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/13/2020 10:30:03 PAGE 3   
 
- 117          {
- 118   1      
- 119   1        if (++lightNum >= 5) //检查外部光线强度的变化
- 120   1        {
- 121   2          if (P2_0 != lightStatus)
- 122   2          {
- 123   3            lightStatusNum++;
- 124   3          }
- 125   2          else
- 126   2          {
- 127   3            lightStatusNum = 0;
- 128   3          }
- 129   2          if (lightStatus)
- 130   2          {
- 131   3            P2_1 = !P2_1; //指示灯闪烁
- 132   3          }
- 133   2          lightNum = 0;
- 134   2        }
- 135   1      
- 136   1        gsmNum++;
- 137   1        distanceNum++;
- 138   1        TH0 = 0x4C; //重新装载初值
- 139   1        TL0 = 0x00;
- 140   1      }
- 141          
- 142          void Time2() interrupt 5 using 1 //定时器T2的中断函数
- 143          {
- 144   1      
- 145   1        if (EXF2) //使用定时器T2的捕获模式
- 146   1        {
- 147   2          double rcap = (RCAP2H << 8 | RCAP2L);       //获取发生中断时的TH2和TL2的值
- 148   2          int distance = (rcap * (12 / 11.0592) * 0.034) / 2; //计算出与障碍物的距离
- 149   2          EXF2 = 0;
- 150   2          if (distance < (distanceLast - 50) || distance > (distanceLast + 50)) //判断与障碍的距离是否�
+ 117          
+ 118          void Time0() interrupt 1 using 0 //定时器T0中断函数
+ 119          {
+ 120   1      
+ 121   1        if (++lightNum >= 5) //检查外部光线强度的变化
+ 122   1        {
+ 123   2          if (P2_0 != lightStatus)
+ 124   2          {
+ 125   3            lightStatusNum++;
+ 126   3          }
+ 127   2          else
+ 128   2          {
+ 129   3            lightStatusNum = 0;
+ 130   3          }
+ 131   2          if (lightStatus)
+ 132   2          {
+ 133   3            P2_1 = !P2_1; //指示灯闪烁
+ 134   3          }
+ 135   2          lightNum = 0;
+ 136   2        }
+ 137   1      
+ 138   1        gsmNum++;
+ 139   1        distanceNum++;
+ 140   1        TH0 = 0x4C; //重新装载初值
+ 141   1        TL0 = 0x00;
+ 142   1      }
+ 143          
+ 144          void Time2() interrupt 5  using 1//定时器T2的中断函数
+ 145          {
+ 146   1      
+ 147   1        if (EXF2) //使用定时器T2的捕获模式
+ 148   1        {
+ 149   2          double rcap = (RCAP2H << 8 | RCAP2L);       //获取发生中断时的TH2和TL2的值
+ 150   2          uint distance = (rcap * (12 / 11.0592) * 0.034) / 2; //计算出与障碍物的距离
+ 151   2          EXF2 = 0;
+ 152   2          if (distance < (distanceLast - 50) || distance > (distanceLast + 50)) //判断与障碍的距离是否�
              -�生了较大的变化
- 151   2          {
- 152   3            distanceLast = distance;
- 153   3            distanceNewNum = 0;
- 154   3            distanceNew = 1;
- 155   3          }
- 156   2          else
- 157   2          {
- 158   3            distanceNewNum++;
- 159   3          }
- 160   2        }
- 161   1      }
- 162          
- 163          void serial_4() interrupt 4 using 3 //UART中断，主要用来接收GPS模块的定位数据
- 164          {
- 165   1        if (RI)
- 166   1        {
- 167   2          uchar temp = SBUF;
- 168   2          RI = 0;
- 169   2          receive[receiveCount++] = temp;
- 170   2          if (temp == '\n')
- 171   2          {
- 172   3            receive[receiveCount] = 0;
- 173   3            if (receive[0] == '$' && receive[3] == 'G' && receive[4] == 'G' && receive[5] == 'A' && receiveCount >=
+ 153   2          {
+ 154   3            distanceLast = distance;
+ 155   3            distanceNewNum = 0;
+ 156   3            distanceNew = 1;
+ 157   3          }
+ 158   2          else
+ 159   2          {
+ 160   3            distanceNewNum++;
+ 161   3          }
+ 162   2        }
+ 163   1      }
+ 164          
+ 165          void serial_4() interrupt 4 using 2 //UART中断，主要用来接收GPS模块的定位数据
+ 166          {
+ 167   1        if (RI)
+ 168   1        {
+ 169   2          uchar temp = SBUF;
+ 170   2          RI = 0;
+ 171   2          receive[receiveCount++] = temp;
+ 172   2          if (temp == '\n')
+ 173   2          {
+ 174   3            receive[receiveCount] = 0;
+ 175   3            if (receive[0] == '$' && receive[3] == 'G' && receive[4] == 'G' && receive[5] == 'A' && receiveCount >=
              - 50 && receiveCount < 100)
- 174   3            {
- 175   4              strcpy(gpsSave, receive);
- 176   4            }
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/11/2020 21:38:31 PAGE 4   
+ 176   3            {
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/13/2020 10:30:03 PAGE 4   
 
- 177   3            receiveCount = 0;
- 178   3            receive[0] = 0;
- 179   3          }
- 180   2        }
- 181   1      }
- 182          
- 183          void external_0() interrupt 0 using 2 //外部中断INT0的中断函数，语音模块音量加1
- 184          {
- 185   1        if (volume < 30)
- 186   1        {
- 187   2          mediaCommand[3] = 0x06;
- 188   2          mediaCommand[6] = ++volume;
- 189   2          sendData(mediaCommand, 8);
- 190   2          IapEraseSector(IAP_ADDR);
- 191   2          IapProgramByte(IAP_ADDR, volume);
- 192   2        }
- 193   1      }
- 194          
- 195          void external_1() interrupt 2 using 2 //外部中断INT1的中断函数，语音模块音量减1
- 196          {
- 197   1        if (volume > 5)
- 198   1        {
- 199   2          mediaCommand[3] = 0x06;
- 200   2          mediaCommand[6] = --volume;
- 201   2          sendData(mediaCommand, 8);
- 202   2          IapEraseSector(IAP_ADDR);
- 203   2          IapProgramByte(IAP_ADDR, volume);
- 204   2        }
- 205   1      }
- 206          
- 207          void main()
- 208          {
- 209   1      
- 210   1        EA = 1; //开总中断
- 211   1      
- 212   1        ET0 = 1; //开T0中断
- 213   1        TR0 = 1;
- 214   1        TMOD |= 0x01;
- 215   1        TH0 = 0x4C;
- 216   1        TL0 = 0x00;
- 217   1      
- 218   1        TR1 = 1; //设置定时器T1为波特率发生器
- 219   1        TMOD |= 0x20;
- 220   1        TL1 = 0xFD;
- 221   1        TH1 = 0xFD;
- 222   1      
- 223   1        ET2 = 1; //开定时器/计数器T2的捕获模式
- 224   1        TR2 = 1;
- 225   1        EXEN2 = 1;
- 226   1        CP_RL2 = 1;
- 227   1      
- 228   1        ES = 1; //开UART中断，设置串行口通讯的工作模式
- 229   1        SM0 = 0;
- 230   1        SM1 = 1;
- 231   1        REN = 1;
- 232   1      
- 233   1        EX0 = 1; //开外部中断INT0和INT1
- 234   1        EX1 = 1;
- 235   1        IT0 = 1;
- 236   1        IT1 = 1;
- 237   1      
- 238   1        WDT_CONTR = 0x37; //开看门狗，在受到干扰使程序跑飞时自动复位
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/11/2020 21:38:31 PAGE 5   
+ 177   4              strcpy(gpsSave, receive);
+ 178   4            }
+ 179   3            receiveCount = 0;
+ 180   3            receive[0] = 0;
+ 181   3          }
+ 182   2        }
+ 183   1      }
+ 184          
+ 185          void external_0() interrupt 0 using 3 //外部中断INT0的中断函数，语音模块音量加1
+ 186          {
+ 187   1        if (volume < 30)
+ 188   1        {
+ 189   2          mediaCommand[3] = 0x06;
+ 190   2          mediaCommand[6] = ++volume;
+ 191   2          if(test){
+ 192   3            TI = 1;
+ 193   3            printf("音量加键被按下，语音播放模块音量加1%d ->%d\n",volume-1,volume);
+ 194   3            printf("向语音模块发送指令：7E FF 06 06 00 00 %X EF\n",volume);
+ 195   3            TI =0;
+ 196   3          } else {
+ 197   3            sendData(mediaCommand, 8);
+ 198   3          }
+ 199   2          IapEraseSector(IAP_ADDR);
+ 200   2          IapProgramByte(IAP_ADDR, volume);
+ 201   2        }
+ 202   1      }
+ 203          
+ 204          void external_1() interrupt 2 using 3 //外部中断INT1的中断函数，语音模块音量减1
+ 205          {
+ 206   1        if (volume > 5)
+ 207   1        {
+ 208   2          mediaCommand[3] = 0x06;
+ 209   2          mediaCommand[6] = --volume;
+ 210   2          if(test){
+ 211   3            T1 =1;
+ 212   3            printf("音量减键被按下，语音播放模块音量加1：%d->%d\n",volume+1,volume);
+ 213   3            printf("向语音模块发送指令：7E FF 06 06 00 00 %X EF\n",volume);
+ 214   3            TI = 0;
+ 215   3          } else {
+ 216   3            sendData(mediaCommand, 8);
+ 217   3          }
+ 218   2          
+ 219   2          IapEraseSector(IAP_ADDR);
+ 220   2          IapProgramByte(IAP_ADDR, volume);
+ 221   2        }
+ 222   1      }
+ 223          
+ 224          void main()
+ 225          {
+ 226   1      
+ 227   1        EA = 1; //开总中断
+ 228   1      
+ 229   1        ET0 = 1; //开T0中断
+ 230   1        TR0 = 1;
+ 231   1        TMOD |= 0x01;
+ 232   1        TH0 = 0x4C;
+ 233   1        TL0 = 0x00;
+ 234   1      
+ 235   1        TR1 = 1; //设置定时器T1为波特率发生器
+ 236   1        TMOD |= 0x20;
+ 237   1        TL1 = 0xFD;
+ 238   1        TH1 = 0xFD;
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/13/2020 10:30:03 PAGE 5   
 
  239   1      
- 240   1        memset(receive, 0, 100);
- 241   1        memset(gpsSave, 0, 100);
- 242   1        gsmCmd[7] = gpsSave;
- 243   1      
- 244   1        delay(20000); //等待语音模块启动完毕后
- 245   1        volume = IapReadByte(IAP_ADDR);
- 246   1        mediaCommand[3] = 0x06;
- 247   1        mediaCommand[6] = volume;
- 248   1        sendData(mediaCommand, 8); //初始化语音模块的音量大小
+ 240   1        ET2 = 1; //开定时器/计数器T2的捕获模式
+ 241   1        TR2 = 1;
+ 242   1        EXEN2 = 1;
+ 243   1        CP_RL2 = 1;
+ 244   1      
+ 245   1        ES = 1; //开UART中断，设置串行口通讯的工作模式
+ 246   1        SM0 = 0;
+ 247   1        SM1 = 1;
+ 248   1        REN = 1;
  249   1      
- 250   1        while (1)
- 251   1        {
- 252   2      
- 253   2          if (distanceNum >= 10) //在间隔一定的时间后向测距模块发送高电平脉冲
- 254   2          {
- 255   3            Trig = 0;
- 256   3            delay(10);
- 257   3            Trig = 1;
- 258   3            while (!Echo)
- 259   3              ; //等待测距模块返回高电平信号
- 260   3            TH2 = 0x00;
- 261   3            TL2 = 0x00;
- 262   3            distanceNum = 0; //喂看门狗
- 263   3            WDT_CONTR = 0x37;
- 264   3          }
- 265   2      
- 266   2          if (distanceNew && distanceNewNum >= 2) //如果测距的数据发生新的变化
- 267   2          {
- 268   3            uchar distanceCurRange = 0x00;
- 269   3      
- 270   3            if (distanceLast >= 25 && distanceLast < 75) //根据新的测距数据确定要播放的语音文件
- 271   3            {
- 272   4              distanceCurRange = 0x01;
- 273   4            }
- 274   3            if (distanceLast >= 75 && distanceLast < 125)
- 275   3            {
- 276   4              distanceCurRange = 0x02;
- 277   4            }
- 278   3            if (distanceLast >= 125 && distanceLast < 175)
- 279   3            {
- 280   4              distanceCurRange = 0x03;
- 281   4            }
- 282   3            if (distanceLast >= 175 && distanceLast < 225)
- 283   3            {
- 284   4              distanceCurRange = 0x04;
- 285   4            }
- 286   3            if (distanceLast >= 225 && distanceLast < 275)
- 287   3            {
- 288   4              distanceCurRange = 0x05;
- 289   4            }
- 290   3            if (distanceLast >= 275 && distanceLast < 325)
- 291   3            {
- 292   4              distanceCurRange = 0x06;
- 293   4            }
- 294   3            if (distanceLast >= 325 && distanceLast < 375)
- 295   3            {
- 296   4              distanceCurRange = 0x07;
- 297   4            }
- 298   3            if (distanceLast >= 375 && distanceLast < 425)
- 299   3            {
- 300   4              distanceCurRange = 0x08;
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/11/2020 21:38:31 PAGE 6   
+ 250   1        EX0 = 1; //开外部中断INT0和INT1
+ 251   1        EX1 = 1;
+ 252   1        IT0 = 1;
+ 253   1        IT1 = 1;
+ 254   1      
+ 255   1        WDT_CONTR = 0x37; //开看门狗，在受到干扰使程序跑飞时自动复位
+ 256   1      
+ 257   1        memset(receive, 0, 100);
+ 258   1        memset(gpsSave, 0, 100);
+ 259   1        gsmCmd[7] = gpsSave;
+ 260   1      
+ 261   1        delay(20000); //等待语音模块启动完毕后
+ 262   1        volume = IapReadByte(IAP_ADDR);
+ 263   1        mediaCommand[3] = 0x06;
+ 264   1        mediaCommand[6] = volume;
+ 265   1        if(test){
+ 266   2          TI = 1;
+ 267   2          printf("启动时初始化语音模块音量：7E FF 06 06 00 00 %X EF\n",volume);
+ 268   2          TI =0;
+ 269   2        }
+ 270   1        sendData(mediaCommand, 8); //初始化语音模块的音量大小
+ 271   1        while (1)
+ 272   1        {
+ 273   2      
+ 274   2          if (distanceNum >= 10) //在间隔一定的时间后向测距模块发送高电平脉冲
+ 275   2          {
+ 276   3            Trig = 0;
+ 277   3            delay(10);
+ 278   3            Trig = 1;
+ 279   3            while (!Echo)
+ 280   3              ; //等待测距模块返回高电平信号
+ 281   3            TH2 = 0x00;
+ 282   3            TL2 = 0x00;
+ 283   3            distanceNum = 0; //喂看门狗
+ 284   3            WDT_CONTR = 0x37;
+ 285   3          }
+ 286   2      
+ 287   2          if (distanceNew && distanceNewNum >= 2) //如果测距的数据发生新的变化
+ 288   2          {
+ 289   3            uchar distanceCurRange = 0x00;
+ 290   3      
+ 291   3            if (distanceLast >= 25 && distanceLast < 75) //根据新的测距数据确定要播放的语音文件
+ 292   3            {
+ 293   4              distanceCurRange = 0x01;
+ 294   4            }
+ 295   3            if (distanceLast >= 75 && distanceLast < 125)
+ 296   3            {
+ 297   4              distanceCurRange = 0x02;
+ 298   4            }
+ 299   3            if (distanceLast >= 125 && distanceLast < 175)
+ 300   3            {
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/13/2020 10:30:03 PAGE 6   
 
- 301   4            }
- 302   3            if (distanceLast >= 425 && distanceLast < 475)
- 303   3            {
- 304   4              distanceCurRange = 0x09;
- 305   4            }
- 306   3            if (distanceLast >= 475 && distanceLast < 525)
- 307   3            {
- 308   4              distanceCurRange = 0x0A;
- 309   4            }
- 310   3            if (distanceLast >= 525 && distanceLast < 575)
- 311   3            {
- 312   4              distanceCurRange = 0x0B;
- 313   4            }
- 314   3      
- 315   3            if (distanceCurRange != 0x00 && distanceCurRange != distanceLastRange) //如果前方有障碍物或已
-             -经还没提示过了，则发送相关指令
+ 301   4              distanceCurRange = 0x03;
+ 302   4            }
+ 303   3            if (distanceLast >= 175 && distanceLast < 225)
+ 304   3            {
+ 305   4              distanceCurRange = 0x04;
+ 306   4            }
+ 307   3            if (distanceLast >= 225 && distanceLast < 275)
+ 308   3            {
+ 309   4              distanceCurRange = 0x05;
+ 310   4            }
+ 311   3            if (distanceLast >= 275 && distanceLast < 325)
+ 312   3            {
+ 313   4              distanceCurRange = 0x06;
+ 314   4            }
+ 315   3            if (distanceLast >= 325 && distanceLast < 375)
  316   3            {
- 317   4              distanceLastRange = distanceCurRange;
- 318   4              mediaCommand[3] = 0x0F;
- 319   4              mediaCommand[5] = 0x01;
- 320   4              mediaCommand[6] = distanceCurRange;
- 321   4              sendData(mediaCommand, 8); //向语音模块发送指令
- 322   4              delay(13500);
- 323   4              WDT_CONTR = 0x37; //喂看门狗
- 324   4            }
- 325   3            distanceNew = 0;
- 326   3            distanceNewNum = 0;
- 327   3          }
- 328   2      
- 329   2          if (lightStatusNum >= 10) //如果外部环境亮度发生了变化，且持续了一段时间
- 330   2          {
- 331   3            lightStatus = P2_0;
- 332   3            P2_1 = !P2_0;
- 333   3            mediaCommand[3] = 0x0F;
- 334   3            mediaCommand[5] = 0x02;
- 335   3            mediaCommand[6] = lightStatus ? 0x01 : 0x02;
- 336   3            sendData(mediaCommand, 8); //向语音模块发送指令
- 337   3            delay(13500);
- 338   3            WDT_CONTR = 0x37; //喂看门狗
- 339   3            lightStatusNum = 0;
- 340   3          }
- 341   2          switch (gsmIndex) //分别控制每条AT指令的发送间隔时间
- 342   2          {
- 343   3          case 0: //AT+CIPSHUT
- 344   3            if (gsmNum > 10)
- 345   3            {
- 346   4              sendAt();
- 347   4            }
- 348   3            break;
- 349   3          case 1: //AT+CGATT?
- 350   3            if (gsmNum > 10)
- 351   3            {
- 352   4              sendAt();
- 353   4            }
- 354   3            break;
- 355   3          case 2: //AT+CSTT="CMNET"
- 356   3            if (gsmNum > 10)
- 357   3            {
- 358   4              sendAt();
- 359   4            }
- 360   3            break;
- 361   3          case 3: //AT+CIICR
-C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/11/2020 21:38:31 PAGE 7   
+ 317   4              distanceCurRange = 0x07;
+ 318   4            }
+ 319   3            if (distanceLast >= 375 && distanceLast < 425)
+ 320   3            {
+ 321   4              distanceCurRange = 0x08;
+ 322   4            }
+ 323   3            if (distanceLast >= 425 && distanceLast < 475)
+ 324   3            {
+ 325   4              distanceCurRange = 0x09;
+ 326   4            }
+ 327   3            if (distanceLast >= 475 && distanceLast < 525)
+ 328   3            {
+ 329   4              distanceCurRange = 0x0A;
+ 330   4            }
+ 331   3            if (distanceLast >= 525 && distanceLast < 575)
+ 332   3            {
+ 333   4              distanceCurRange = 0x0B;
+ 334   4            }
+ 335   3      
+ 336   3            if (distanceCurRange != 0x00 && distanceCurRange != distanceLastRange) //如果前方有障碍物或已
+             -经还没提示过了，则发送相关指令
+ 337   3            {
+ 338   4              distanceLastRange = distanceCurRange;
+ 339   4              mediaCommand[3] = 0x0F;
+ 340   4              mediaCommand[5] = 0x01;
+ 341   4              mediaCommand[6] = distanceCurRange;
+ 342   4              if(test){
+ 343   5                TI =1;
+ 344   5                printf("与障碍物的距离：%d cm\n",distanceLast);
+ 345   5                printf("向语音模块发送指令：7E FF 06 0F 00 01 %X EF\n",(int)distanceCurRange);
+ 346   5                TI =0;
+ 347   5              }
+ 348   4              sendData(mediaCommand, 8); //向语音模块发送指令
+ 349   4              delay(13500);
+ 350   4              WDT_CONTR = 0x37; //喂看门狗
+ 351   4            }
+ 352   3            distanceNew = 0;
+ 353   3            distanceNewNum = 0;
+ 354   3          }
+ 355   2      
+ 356   2          if (lightStatusNum >= 10) //如果外部环境亮度发生了变化，且持续了一段时间
+ 357   2          {
+ 358   3            lightStatus = P2_0;
+ 359   3            P2_1 = !P2_0;
+ 360   3            mediaCommand[3] = 0x0F;
+ 361   3            mediaCommand[5] = 0x02;
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/13/2020 10:30:03 PAGE 7   
 
- 362   3            if (gsmNum > 50)
- 363   3            {
- 364   4              sendAt();
- 365   4            }
- 366   3            break;
- 367   3          case 4: //AT+CIFSR
- 368   3            if (gsmNum > 50)
- 369   3            {
- 370   4              sendAt();
- 371   4            }
- 372   3            break;
- 373   3          case 5: //AT+CIPSTART="TCP","120.78.203.170","12777"
- 374   3            if (gsmNum > 10)
- 375   3            {
- 376   4              sendAt();
- 377   4            }
- 378   3            break;
- 379   3          case 6: //AT+CIPSEND
- 380   3            if (gsmNum > 150)
- 381   3            {
- 382   4              sendAt();
- 383   4            }
- 384   3            break;
- 385   3          case 7: //gps定位数据
- 386   3            if (gsmNum > 50)
- 387   3            {
- 388   4              sendAt();
- 389   4            }
- 390   3            break;
- 391   3          case 8: //0x1A
- 392   3            if (gsmNum > 5)
- 393   3            {
- 394   4              sendAt();
- 395   4            }
- 396   3            break;
- 397   3          case 9: //AT+CIPCLOSE
- 398   3            if (gsmNum > 10)
- 399   3            {
- 400   4              sendAt();
- 401   4            }
- 402   3            break;
- 403   3          }
- 404   2        }
- 405   1      }
+ 362   3            mediaCommand[6] = lightStatus ? 0x01 : 0x02;
+ 363   3            if(test){
+ 364   4              TI = 1;
+ 365   4              printf("环境光线较%s，指示灯已%s\n",lightStatus?"暗":"亮",lightStatus?"打开":"关闭");
+ 366   4              printf("向语音模块发送指令：7E FF 06 0F 00 02 %X EF\n",(int)(lightStatus ? 0x01 : 0x02));
+ 367   4              TI =0;
+ 368   4            }
+ 369   3            sendData(mediaCommand, 8); //向语音模块发送指令
+ 370   3            delay(13500);
+ 371   3            WDT_CONTR = 0x37; //喂看门狗
+ 372   3            lightStatusNum = 0;
+ 373   3          }
+ 374   2          switch (gsmIndex) //分别控制每条AT指令的发送间隔时间
+ 375   2          {
+ 376   3          case 0: //AT+CIPSHUT
+ 377   3            if (gsmNum > 10)
+ 378   3            {
+ 379   4              sendAt();
+ 380   4            }
+ 381   3            break;
+ 382   3          case 1: //AT+CGATT?
+ 383   3            if (gsmNum > 10)
+ 384   3            {
+ 385   4              sendAt();
+ 386   4            }
+ 387   3            break;
+ 388   3          case 2: //AT+CSTT="CMNET"
+ 389   3            if (gsmNum > 10)
+ 390   3            {
+ 391   4              sendAt();
+ 392   4            }
+ 393   3            break;
+ 394   3          case 3: //AT+CIICR
+ 395   3            if (gsmNum > 50)
+ 396   3            {
+ 397   4              sendAt();
+ 398   4            }
+ 399   3            break;
+ 400   3          case 4: //AT+CIFSR
+ 401   3            if (gsmNum > 50)
+ 402   3            {
+ 403   4              sendAt();
+ 404   4            }
+ 405   3            break;
+ 406   3          case 5: //AT+CIPSTART="TCP","120.78.203.170","12777"
+ 407   3            if (gsmNum > 10)
+ 408   3            {
+ 409   4              sendAt();
+ 410   4            }
+ 411   3            break;
+ 412   3          case 6: //AT+CIPSEND
+ 413   3            if (gsmNum > 150)
+ 414   3            {
+ 415   4              sendAt();
+ 416   4            }
+ 417   3            break;
+ 418   3          case 7: //gps定位数据
+ 419   3            if (gsmNum > 50)
+ 420   3            {
+ 421   4              sendAt();
+ 422   4            }
+ 423   3            break;
+C51 COMPILER V9.59.0.0   PROGREM_1                                                         05/13/2020 10:30:03 PAGE 8   
+
+ 424   3          case 8: //0x1A
+ 425   3            if (gsmNum > 5)
+ 426   3            {
+ 427   4              sendAt();
+ 428   4            }
+ 429   3            break;
+ 430   3          case 9: //AT+CIPCLOSE
+ 431   3            if (gsmNum > 10)
+ 432   3            {
+ 433   4              sendAt();
+ 434   4            }
+ 435   3            break;
+ 436   3          }
+ 437   2        }
+ 438   1      }
 
 
 MODULE INFORMATION:   STATIC OVERLAYABLE
-   CODE SIZE        =   1656    ----
-   CONSTANT SIZE    =    135    ----
-   XDATA SIZE       =    250      12
+   CODE SIZE        =   1959    ----
+   CONSTANT SIZE    =    577    ----
+   XDATA SIZE       =    251      12
    PDATA SIZE       =   ----    ----
    DATA SIZE        =   ----    ----
    IDATA SIZE       =   ----    ----
-   BIT SIZE         =      2    ----
+   BIT SIZE         =      3    ----
 END OF MODULE INFORMATION.
 
 

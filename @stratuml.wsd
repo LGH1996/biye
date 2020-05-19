@@ -1,2 +1,32 @@
-@stratuml
+@startuml fuwuqi
+start
+repeat:等待TCP连接;
+:读取发送过来的数据;
+:解析接收到的数据;
+fork
+if(来自GSM模块？)then(true)
+if(该数据是否合法？)then(true)
+if(相关的ID是否有记录在数据库中？)then(true)
+if(相对已保存的数据是否有变化？)then(true)
+:根据ID更新相关的数据;
+else(false)
+endif
+else(false)
+endif
+else(false)
+endif
+else(false)
+endif
+fork again
+if(来自手机应用端？)then(true)
+:根据ID从数据库中查询相关的数据;
+if(是否查询到了有效数据？)then(true)
+:把查询到的数据发送过去;
+else(false)
+:发送“null”过去;
+endif
+else(false)
+endif
+fork end
+repeat while
 @enduml

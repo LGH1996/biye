@@ -1,6 +1,7 @@
 #include <reg52.h>
 #include <intrins.h>
 #include <string.h>
+#include <stdio.h>
 
 #define IAP_ADDR 0x4000 //内部REPPROM存储语音模块音量值的地址
 #define uchar unsigned char
@@ -19,14 +20,15 @@ sbit P2_0 = P2 ^ 0;
 sbit P2_1 = P2 ^ 1;
 bit lightStatus = 0; //定义各类标志位和辅助变量
 bit distanceNew = 0;
+bit test = 1;
 uchar distanceNum = 0;
 uchar lightNum = 0;
 uchar lightStatusNum = 0;
 uchar distanceNewNum = 0;
 uchar distanceLastRange = 0x00;
-int distanceLast = 0;
+uint distanceLast = 0;
 uchar mediaCommand[] = {0x7E, 0xFF, 0x06, 0x00, 0x00, 0x00, 0x00, 0xEF}; //语音播放模块的指令
-uchar volume = 0x0f;//语音模块的当前声音大小
+uint volume = 0x0f;//语音模块的当前声音大小
 uchar *gsmCmd[10] = {"AT+CIPSHUT\n", "AT+CGATT?\n", "AT+CSTT=\"CMNET\"\n",
 					 "AT+CIICR\n", "AT+CIFSR\n", "AT+CIPSTART=\"TCP\",\"120.78.203.170\",\"12777\"\n",
 					 "AT+CIPSEND\n", "gps", "\x1A", "AT+CIPCLOSE\n"}; //循环发送的AT指令
@@ -139,13 +141,13 @@ void Time0() interrupt 1 using 0 //定时器T0中断函数
 	TL0 = 0x00;
 }
 
-void Time2() interrupt 5 using 1 //定时器T2的中断函数
+void Time2() interrupt 5  using 1//定时器T2的中断函数
 {
 
 	if (EXF2) //使用定时器T2的捕获模式
 	{
 		double rcap = (RCAP2H << 8 | RCAP2L);				//获取发生中断时的TH2和TL2的值
-		int distance = (rcap * (12 / 11.0592) * 0.034) / 2; //计算出与障碍物的距离
+		uint distance = (rcap * (12 / 11.0592) * 0.034) / 2; //计算出与障碍物的距离
 		EXF2 = 0;
 		if (distance < (distanceLast - 50) || distance > (distanceLast + 50)) //判断与障碍的距离是否发生了较大的变化
 		{
@@ -160,7 +162,7 @@ void Time2() interrupt 5 using 1 //定时器T2的中断函数
 	}
 }
 
-void serial_4() interrupt 4 using 3 //UART中断，主要用来接收GPS模块的定位数据
+void serial_4() interrupt 4 using 2 //UART中断，主要用来接收GPS模块的定位数据
 {
 	if (RI)
 	{
@@ -180,25 +182,40 @@ void serial_4() interrupt 4 using 3 //UART中断，主要用来接收GPS模块�
 	}
 }
 
-void external_0() interrupt 0 using 2 //外部中断INT0的中断函数，语音模块音量加1
+void external_0() interrupt 0 using 3 //外部中断INT0的中断函数，语音模块音量加1
 {
 	if (volume < 30)
 	{
 		mediaCommand[3] = 0x06;
 		mediaCommand[6] = ++volume;
-		sendData(mediaCommand, 8);
+		if(test){
+			TI = 1;
+			printf("音量加键被按下，语音播放模块音量加1%d ->%d\n",volume-1,volume);
+			printf("向语音模块发送指令：7E FF 06 06 00 00 %X EF\n",volume);
+			TI =0;
+		} else {
+			sendData(mediaCommand, 8);
+		}
 		IapEraseSector(IAP_ADDR);
 		IapProgramByte(IAP_ADDR, volume);
 	}
 }
 
-void external_1() interrupt 2 using 2 //外部中断INT1的中断函数，语音模块音量减1
+void external_1() interrupt 2 using 3 //外部中断INT1的中断函数，语音模块音量减1
 {
 	if (volume > 5)
 	{
 		mediaCommand[3] = 0x06;
 		mediaCommand[6] = --volume;
-		sendData(mediaCommand, 8);
+		if(test){
+			T1 =1;
+			printf("音量减键被按下，语音播放模块音量加1：%d->%d\n",volume+1,volume);
+			printf("向语音模块发送指令：7E FF 06 06 00 00 %X EF\n",volume);
+			TI = 0;
+		} else {
+			sendData(mediaCommand, 8);
+		}
+		
 		IapEraseSector(IAP_ADDR);
 		IapProgramByte(IAP_ADDR, volume);
 	}
@@ -245,8 +262,12 @@ void main()
 	volume = IapReadByte(IAP_ADDR);
 	mediaCommand[3] = 0x06;
 	mediaCommand[6] = volume;
+	if(test){
+		TI = 1;
+		printf("启动时初始化语音模块音量：7E FF 06 06 00 00 %X EF\n",volume);
+		TI =0;
+	}
 	sendData(mediaCommand, 8); //初始化语音模块的音量大小
-
 	while (1)
 	{
 
@@ -318,6 +339,12 @@ void main()
 				mediaCommand[3] = 0x0F;
 				mediaCommand[5] = 0x01;
 				mediaCommand[6] = distanceCurRange;
+				if(test){
+					TI =1;
+					printf("与障碍物的距离：%d cm\n",distanceLast);
+					printf("向语音模块发送指令：7E FF 06 0F 00 01 %X EF\n",(int)distanceCurRange);
+					TI =0;
+				}
 				sendData(mediaCommand, 8); //向语音模块发送指令
 				delay(13500);
 				WDT_CONTR = 0x37; //喂看门狗
@@ -333,6 +360,12 @@ void main()
 			mediaCommand[3] = 0x0F;
 			mediaCommand[5] = 0x02;
 			mediaCommand[6] = lightStatus ? 0x01 : 0x02;
+			if(test){
+				TI = 1;
+				printf("环境光线较%s，指示灯已%s\n",lightStatus?"暗":"亮",lightStatus?"打开":"关闭");
+				printf("向语音模块发送指令：7E FF 06 0F 00 02 %X EF\n",(int)(lightStatus ? 0x01 : 0x02));
+				TI =0;
+			}
 			sendData(mediaCommand, 8); //向语音模块发送指令
 			delay(13500);
 			WDT_CONTR = 0x37; //喂看门狗
